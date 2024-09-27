@@ -12,14 +12,25 @@ class HistoryBlock {
   constructor() {
     this.changeBlacklistType();
     this.changeBlacklistMatching();
-    this.createContextMenuItems();
+    this.createOrRemoveContextMenuItems();
     this.attachEventListeners();
   }
 
   /**
-   * Creates the HistoryBlock context menu items.
+   * Create or remove the HistoryBlock context menu items.
    */
-  createContextMenuItems() {
+  async createOrRemoveContextMenuItems() {
+    let storage = await browser.storage.sync.get();
+
+    if (typeof storage.showcontextmenu !== 'boolean') {
+      storage.showcontextmenu = true;
+    }
+
+    if (!storage.showcontextmenu) {
+      browser.contextMenus.removeAll();
+      return;
+    }
+
     browser.contextMenus.create({
       id: "blockthis",
       title: browser.i18n.getMessage('block'),
@@ -37,7 +48,7 @@ class HistoryBlock {
    * Attaches the various HistoryBlock event listeners.
    */
   attachEventListeners() {
-    browser.tabs.onRemoved.addListener( 
+    browser.tabs.onRemoved.addListener(
       (tabId, removeInfo) => this.onTabRemoved(tabId, removeInfo)
     );
     browser.windows.onRemoved.addListener(
@@ -49,8 +60,8 @@ class HistoryBlock {
     browser.contextMenus.onClicked.addListener(
       (info, tab) => this.onContextMenuItemClicked(info, tab)
     );
-    browser.runtime.onMessage.addListener( 
-      message => this.onMessage(message) );
+    browser.runtime.onMessage.addListener(
+      message => this.onMessage(message));
   }
 
   /**
@@ -61,7 +72,7 @@ class HistoryBlock {
    *         handled.
    */
   async onMessage(message) {
-    switch(message.action) {
+    switch (message.action) {
       case 'addToBlacklist':
         return this.block(message.url);
       case 'importBlacklist':
@@ -76,6 +87,8 @@ class HistoryBlock {
       case 'changeBlacklistMatching':
         await this.changeBlacklistMatching(message.matching);
         return this.clearBlacklist();
+      case 'changeContextMenuVisibility':
+        return this.changeContextMenuVisibility(message.show);
     }
   }
 
@@ -92,7 +105,7 @@ class HistoryBlock {
    *         handled.
    */
   async onContextMenuItemClicked(info, tab) {
-    switch(info.menuItemId) {
+    switch (info.menuItemId) {
       case "blockthis":
         return this.block(tab.url);
       case "unblockthis":
@@ -116,15 +129,15 @@ class HistoryBlock {
    *         potentially forgotten.
    */
   async onTabRemoved(tabId, removeInfo) {
-    let info = await browser.sessions.getRecentlyClosed({maxResults: 1});
+    let info = await browser.sessions.getRecentlyClosed({ maxResults: 1 });
 
-    if(info[0].tab) {
+    if (info[0].tab) {
       let tab = info[0].tab;
       let domain = this.matcher.match(tab.url);
       let hash = await this.hash.digest(domain);
       let blacklist = await this.getBlacklist();
 
-      if(blacklist.includes(hash)) {
+      if (blacklist.includes(hash)) {
         await browser.sessions.forgetClosedTab(tab.windowId, tab.sessionId);
       }
     }
@@ -144,16 +157,16 @@ class HistoryBlock {
    *         then potentially forgotten.
    */
   async onWindowRemoved(windowId) {
-    let info = await browser.sessions.getRecentlyClosed({maxResults: 1});
+    let info = await browser.sessions.getRecentlyClosed({ maxResults: 1 });
 
-    if(info[0].window) {
+    if (info[0].window) {
       // If there is a window, there is a tab.
       let tab = info[0].window.tabs[0];
       let domain = this.matcher.match(tab.url);
       let hash = await this.hash.digest(domain);
       let blacklist = await this.getBlacklist();
 
-      if(blacklist.includes(hash)) {
+      if (blacklist.includes(hash)) {
         await browser.sessions.forgetClosedWindow(info[0].window.sessionId);
       }
     }
@@ -175,8 +188,8 @@ class HistoryBlock {
     let hash = await this.hash.digest(domain);
     let blacklist = await this.getBlacklist();
 
-    if(blacklist.includes(hash)) {
-      await browser.history.deleteUrl({'url': info.url});
+    if (blacklist.includes(hash)) {
+      await browser.history.deleteUrl({ 'url': info.url });
     }
   }
 
@@ -193,7 +206,7 @@ class HistoryBlock {
     await this.getBlacklist();
 
     // Purposefully do not wait for this Promise to be fulfilled.
-    browser.runtime.sendMessage({action: 'blacklistUpdated'});
+    browser.runtime.sendMessage({ action: 'blacklistUpdated' });
   }
 
   /**
@@ -205,8 +218,8 @@ class HistoryBlock {
   async getBlacklist() {
     let storage = await browser.storage.sync.get();
 
-    if(!storage.blacklist) {
-      await browser.storage.sync.set({blacklist:[]});
+    if (!storage.blacklist) {
+      await browser.storage.sync.set({ blacklist: [] });
 
       storage = await browser.storage.sync.get();
     }
@@ -222,21 +235,21 @@ class HistoryBlock {
    *         been imported into the blacklist.
    */
   async importBlacklist(list) {
-    if(list) {
+    if (list) {
       let blarr = list.split(',');
       let blacklist = await this.getBlacklist();
 
-      for(let i = 0; i < blarr.length; i++) {
+      for (let i = 0; i < blarr.length; i++) {
         let hash = blarr[i].trim();
-        if(!blacklist.includes(hash) && this.hash.test(hash)) {
+        if (!blacklist.includes(hash) && this.hash.test(hash)) {
           blacklist.push(hash);
         }
       }
 
-      await browser.storage.sync.set({blacklist:blacklist});
+      await browser.storage.sync.set({ blacklist: blacklist });
 
       // Purposefully do not wait for this Promise to be fulfilled.
-      browser.runtime.sendMessage({action: 'blacklistUpdated'});
+      browser.runtime.sendMessage({ action: 'blacklistUpdated' });
     }
   }
 
@@ -252,19 +265,19 @@ class HistoryBlock {
   async block(url) {
     let domain = this.matcher.match(url);
 
-    if(domain) {
+    if (domain) {
       let hash = await this.hash.digest(domain);
       let blacklist = await this.getBlacklist();
 
-      if(!blacklist.includes(hash)) {
+      if (!blacklist.includes(hash)) {
         blacklist.push(hash);
 
-        await browser.storage.sync.set({blacklist:blacklist});
+        await browser.storage.sync.set({ blacklist: blacklist });
 
         // Purposefully do not wait for this Promise to be fulfilled.
-        browser.runtime.sendMessage({action: 'blacklistUpdated'});
+        browser.runtime.sendMessage({ action: 'blacklistUpdated' });
 
-        await browser.history.deleteUrl({'url': url});
+        await browser.history.deleteUrl({ 'url': url });
       }
     }
   }
@@ -281,17 +294,17 @@ class HistoryBlock {
   async unblock(url) {
     let domain = this.matcher.match(url);
 
-    if(domain) {
+    if (domain) {
       let hash = await this.hash.digest(domain);
       let blacklist = await this.getBlacklist();
 
-      if(blacklist.includes(hash)) {
+      if (blacklist.includes(hash)) {
         blacklist.splice(blacklist.indexOf(hash), 1);
 
-        await browser.storage.sync.set({blacklist:blacklist});
+        await browser.storage.sync.set({ blacklist: blacklist });
 
         // Purposefully do not wait for this Promise to be fulfilled.
-        browser.runtime.sendMessage({action: 'blacklistUpdated'});
+        browser.runtime.sendMessage({ action: 'blacklistUpdated' });
       }
     }
   }
@@ -308,12 +321,12 @@ class HistoryBlock {
   async changeBlacklistType(type) {
     let blacklist = await this.getBlacklist();
 
-    if(!type) {
+    if (!type) {
       type = await browser.storage.sync.get('type');
       type = type.type;
     }
 
-    if(type === 'none') {
+    if (type === 'none') {
       this.hash = new NoHash();
     }
     else {
@@ -323,8 +336,8 @@ class HistoryBlock {
         await this.block(domain);
       })
     }
-    
-    await browser.storage.sync.set({type: type});
+
+    await browser.storage.sync.set({ type: type });
   }
 
   /**
@@ -337,22 +350,36 @@ class HistoryBlock {
    *         technique is potentially changed.
    */
   async changeBlacklistMatching(matching) {
-    if(!matching) {
+    if (!matching) {
       matching = await browser.storage.sync.get('matching');
       matching = matching.matching;
     }
 
-    if(matching === 'subdomain') {
+    if (matching === 'subdomain') {
       this.matcher = new SubdomainMatcher();
     }
-    else if(matching === 'url') {
+    else if (matching === 'url') {
       this.matcher = new URLMatcher();
     }
     else {
       this.matcher = new DomainMatcher();
     }
 
-    await browser.storage.sync.set({matching: matching});
+    await browser.storage.sync.set({ matching: matching });
+  }
+
+  /**
+   * Changes whether or not the context menu items should be shown.
+   * 
+   * @param  {boolean} show
+   *        Whether or not to show the context menu items.
+   * @return {Promise} promise
+   *        A Promise that is fulfilled after the context menu show value is
+   *       potentially changed.
+   */
+  async changeContextMenuVisibility(show) {
+    await browser.storage.sync.set({ showcontextmenu: show });
+    await this.createOrRemoveContextMenuItems();
   }
 }
 

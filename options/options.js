@@ -7,6 +7,7 @@ class Options {
 
     this.renderBlacklistType();
     this.renderBlacklistMatching();
+    this.renderContextMenu();
     this.renderBlacklist();
   }
 
@@ -24,6 +25,8 @@ class Options {
       "change", event => this.changeBlacklistType(event.target.value));
     document.querySelector("#blacklistmatching").addEventListener(
       "change", event => this.changeBlacklistMatching(event.target.value));
+    document.querySelector("#blacklistshowcontextmenu").addEventListener(
+      "change", event => this.changeContextMenuShow(event.target.value));
     document.querySelector("#import").addEventListener(
       "click", () => this.importBlacklist() );
   }
@@ -157,6 +160,20 @@ class Options {
   }
 
   /**
+   * Sends a message to have HistoryBlock change the context menu visibility.
+   *  
+   * @param {string} value
+   *       The value of the radio button that was clicked.
+   * @return {Promise} promise
+   *        A Promise that will be fulfilled after the context menu visibility
+   *       has been changed.
+   */
+  async changeContextMenuShow(value) {
+    await browser.runtime.sendMessage({action: 'changeContextMenuVisibility', show: value !== 'disable'});
+    await this.renderContextMenu();
+  }
+
+  /**
    * Renders the blacklist encryption type controls.
    *
    * @return {Promise} promise
@@ -206,6 +223,31 @@ class Options {
     for(let i=0; i<radios.length; i++) {
       let radio = radios[i];
       if(radio.value === storage.matching) {
+        radio.checked = true;
+      }
+    }
+  }
+
+  /**
+   * Renders the context menu show/hide controls.
+   *
+   * @return {Promise} promise
+   *         A Promise that will be fulfilled after the context menu show/hide
+   *         rendered.
+   */
+  async renderContextMenu() {
+    let storage = await browser.storage.sync.get();
+
+    if(typeof storage.showcontextmenu !== 'boolean') {
+      storage.showcontextmenu = true;
+    }
+
+    let enableStateStr = storage.showcontextmenu ? 'enable' : 'disable';
+    let radios = document.querySelectorAll('#blacklistshowcontextmenu input');
+
+    for(let i=0; i<radios.length; i++) {
+      let radio = radios[i];
+      if(radio.value === enableStateStr) {
         radio.checked = true;
       }
     }
