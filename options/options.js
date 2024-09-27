@@ -25,7 +25,7 @@ class Options {
       "change", event => this.changeBlacklistType(event.target.value));
     document.querySelector("#blacklistmatching").addEventListener(
       "change", event => this.changeBlacklistMatching(event.target.value));
-    document.querySelector("#blacklistshowcontextmenu").addEventListener(
+    document.querySelector("#showcontextmenu").addEventListener(
       "change", event => this.changeContextMenuShow(event.target.value));
     document.querySelector("#import").addEventListener(
       "click", () => this.importBlacklist() );
@@ -243,7 +243,7 @@ class Options {
     }
 
     let enableStateStr = storage.showcontextmenu ? 'enable' : 'disable';
-    let radios = document.querySelectorAll('#blacklistshowcontextmenu input');
+    let radios = document.querySelectorAll('#showcontextmenu input');
 
     for(let i=0; i<radios.length; i++) {
       let radio = radios[i];
